@@ -62,10 +62,10 @@ class NotificationWindow(QDialog):
         layout.addWidget(title)
         
         # Scroll area for notifications
-        self.scroll = QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         
         # Content widget for notifications
         self.content_widget = QWidget()
@@ -79,8 +79,8 @@ class NotificationWindow(QDialog):
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.content_layout.addWidget(self.empty_label)
         
-        self.scroll.setWidget(self.content_widget)
-        layout.addWidget(self.scroll)
+        self.scroll_area.setWidget(self.content_widget)
+        layout.addWidget(self.scroll_area)
         
         # Buttons
         button_layout = QHBoxLayout()
@@ -130,13 +130,13 @@ class NotificationWindow(QDialog):
         
         # Title
         title_label = BodyLabel(title)
-        title_label.setFont(get_font_manager().get_header_font(12))
+        title_label.setFont(get_font_manager().get_medium_font(12))
         title_label.setStyleSheet(f"color: {type_text_colors.get(notification_type, type_text_colors['info'])}; font-weight: bold;")
         notification_layout.addWidget(title_label)
         
         # Message
         message_label = BodyLabel(message)
-        message_label.setFont(get_font_manager().get_body_font(10))
+        message_label.setFont(get_font_manager().get_font(10))
         message_label.setWordWrap(True)
         message_label.setStyleSheet("color: rgba(255, 255, 255, 0.9);")
         notification_layout.addWidget(message_label)
@@ -145,7 +145,7 @@ class NotificationWindow(QDialog):
         from datetime import datetime
         timestamp = datetime.now().strftime("%H:%M:%S")
         time_label = BodyLabel(timestamp)
-        time_label.setFont(get_font_manager().get_body_font(9))
+        time_label.setFont(get_font_manager().get_light_font(9))
         time_label.setStyleSheet("color: rgba(255, 255, 255, 0.6);")
         time_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         notification_layout.addWidget(time_label)
@@ -164,7 +164,11 @@ class NotificationWindow(QDialog):
             old_notification.deleteLater()
         
         # Auto-scroll to top
-        QTimer.singleShot(100, lambda: self.scroll.verticalScrollBar().setValue(0))
+        def scroll_to_top():
+            scrollbar = self.scroll_area.verticalScrollBar()
+            if scrollbar:
+                scrollbar.setValue(0)
+        QTimer.singleShot(100, scroll_to_top)
     
     def clear_notifications(self):
         """Clear all notifications."""
@@ -200,7 +204,7 @@ class AnalysisResultsDialog(QDialog):
         
         # Title
         title = TitleLabel("Analysis Results")
-        title.setFont(get_font_manager().get_header_font(18))
+        title.setFont(get_font_manager().get_extrabold_font(18))
         layout.addWidget(title)
         
         # Scroll area for content
@@ -270,7 +274,7 @@ class AnalysisResultsDialog(QDialog):
         """Add a section with title and data to the layout."""
         # Section title
         section_title = BodyLabel(title)
-        section_title.setFont(get_font_manager().get_header_font(14))
+        section_title.setFont(get_font_manager().get_semibold_font(14))
         section_title.setStyleSheet("color: rgba(94, 129, 172, 1.0); font-weight: bold; margin-top: 10px;")
         layout.addWidget(section_title)
         
@@ -284,13 +288,13 @@ class AnalysisResultsDialog(QDialog):
         for row, (key, value) in enumerate(data.items()):
             # Key label
             key_label = BodyLabel(f"{key}:")
-            key_label.setFont(get_font_manager().get_body_font(10))
+            key_label.setFont(get_font_manager().get_medium_font(10))
             key_label.setStyleSheet("color: rgba(255, 255, 255, 0.8); font-weight: bold;")
             grid_layout.addWidget(key_label, row, 0, Qt.AlignmentFlag.AlignTop)
             
             # Value label
             value_label = BodyLabel(str(value))
-            value_label.setFont(get_font_manager().get_body_font(10))
+            value_label.setFont(get_font_manager().get_font(10))
             value_label.setStyleSheet("color: rgba(255, 255, 255, 0.9);")
             value_label.setWordWrap(True)
             grid_layout.addWidget(value_label, row, 1, Qt.AlignmentFlag.AlignTop)
@@ -357,7 +361,7 @@ class MainWindow(SplitFluentWindow):
         # Category header with info icon
         category_header_layout = QHBoxLayout()
         category_header = TitleLabel("Categories")
-        category_header.setFont(get_font_manager().get_header_font(16))
+        category_header.setFont(get_font_manager().get_semibold_font(16))
         category_header.setStyleSheet("TitleLabel { text-decoration: none; }")
         category_header_layout.addWidget(category_header)
         
@@ -436,7 +440,7 @@ class MainWindow(SplitFluentWindow):
 
         # Sample list header
         sample_header = TitleLabel("Samples")
-        sample_header.setFont(get_font_manager().get_header_font(16))
+        sample_header.setFont(get_font_manager().get_semibold_font(16))
         # Remove underline styling
         sample_header.setStyleSheet("TitleLabel { text-decoration: none; }")
         right_layout.addWidget(sample_header)
@@ -1055,7 +1059,7 @@ class MainWindow(SplitFluentWindow):
                     current_file = sample_data["file_path"]
             
             # Get diagnostics
-            diagnosis = self.audio_player.diagnose_playback_issues(current_file)
+            diagnosis = self.audio_player.diagnose_playback_issues(current_file or "")
             device_info = self.audio_player.get_audio_device_info()
             
             # Create diagnostic dialog
@@ -1104,8 +1108,8 @@ class MainWindow(SplitFluentWindow):
         Returns:
             tuple: (category, subcategory) if valid selection, (None, None) otherwise
         """
-        if (category_item := self.category_tree.currentItem()) and category_item.parent():
-            category = category_item.parent().text(0)
+        if (category_item := self.category_tree.currentItem()) and (parent := category_item.parent()):
+            category = parent.text(0)
             subcategory = category_item.text(0)
             return category, subcategory
         return None, None
@@ -1123,8 +1127,8 @@ class MainWindow(SplitFluentWindow):
         else:
             manual_category = manual_subcategory = None
         
-        files = self._get_files_to_add(auto_organize, manual_category, manual_subcategory)
-        if not files:
+        # Use named expression and reintroduce else after early return
+        if not (files := self._get_files_to_add(auto_organize, manual_category, manual_subcategory)):
             return
         
         self._process_selected_files(files, auto_organize, manual_category, manual_subcategory)
@@ -1146,9 +1150,12 @@ class MainWindow(SplitFluentWindow):
         msg_box.setDefaultButton(QMessageBox.StandardButton.Yes)
         
         # Set button text
-        msg_box.button(QMessageBox.StandardButton.Yes).setText("Auto-organize")
-        msg_box.button(QMessageBox.StandardButton.No).setText("Manual")
-        msg_box.button(QMessageBox.StandardButton.Cancel).setText("Cancel")
+        if yes_button := msg_box.button(QMessageBox.StandardButton.Yes):
+            yes_button.setText("Auto-organize")
+        if no_button := msg_box.button(QMessageBox.StandardButton.No):
+            no_button.setText("Manual")
+        if cancel_button := msg_box.button(QMessageBox.StandardButton.Cancel):
+            cancel_button.setText("Cancel")
         
         reply = msg_box.exec()
         return None if reply == QMessageBox.StandardButton.Cancel else reply == QMessageBox.StandardButton.Yes
@@ -1164,17 +1171,17 @@ class MainWindow(SplitFluentWindow):
             return None, None
         
         # Determine category and subcategory
-        if current_item.parent():
-            # Subcategory selected
-            return current_item.parent().text(0), current_item.text(0)
+        if not current_item.parent():
+            # Only category selected, ask user to select subcategory
+            self._add_notification(
+                "Select Subcategory",
+                "Please select a specific subcategory to add samples to",
+                "warning"
+            )
+            return None, None
         
-        # Only category selected, ask user to select subcategory
-        self._add_notification(
-            "Select Subcategory",
-            "Please select a specific subcategory to add samples to",
-            "warning"
-        )
-        return None, None
+        # Subcategory selected - use if expression with proper null check
+        return (parent.text(0), current_item.text(0)) if (parent := current_item.parent()) else (None, None)
     
     def _get_files_to_add(self, auto_organize, manual_category, manual_subcategory):
         """Show file dialog and return selected files."""
@@ -1185,6 +1192,7 @@ class MainWindow(SplitFluentWindow):
         title = "Add Samples (Auto-organize)" if auto_organize else f"Add Samples to {manual_category} > {manual_subcategory}"
         file_dialog.setWindowTitle(title)
         
+        # Use named expression for the dialog execution and file selection
         return file_dialog.selectedFiles() if file_dialog.exec() else []
     
     def _process_selected_files(self, files, auto_organize, manual_category, manual_subcategory):
@@ -1205,8 +1213,7 @@ class MainWindow(SplitFluentWindow):
                         org_key = f"{category} > {subcategory}"
                         organized_samples.setdefault(org_key, []).append(source_path.name)
                 else:
-                    category, subcategory = manual_category, manual_subcategory
-                    analysis_result = None
+                    category, subcategory, analysis_result = manual_category, manual_subcategory, None
                 
                 if category and self._copy_and_analyze_sample(source_path, category, subcategory, analysis_result, auto_organize, i, len(files)):
                     successful_adds += 1
@@ -1361,11 +1368,15 @@ class MainWindow(SplitFluentWindow):
         return None
 
     def _classify_by_detected_category(self, detected_category, spectral_centroid, zero_crossing_rate, duration, bpm):
-        """Classify sample based on detected category from analysis."""
+        """Classify sample based on detected category from analysis with improved kick vs 808 logic."""
         if detected_category == "Drums":
-            # Use spectral analysis to determine drum type
+            # Enhanced drum type classification
             if spectral_centroid < 800:
-                return "Drums", "Kicks"
+                # Low frequency drums - distinguish between kicks and other low drums
+                if duration < 2.0 and spectral_centroid > 200:
+                    return "Drums", "Kicks"  # Short + some mid-frequency content = kick
+                else:
+                    return "Drums", "Full Loops"  # Longer or very low = drum loop
             elif spectral_centroid > 4000:
                 return "Drums", "Hi-Hats"
             elif zero_crossing_rate > 0.1:
@@ -1373,7 +1384,13 @@ class MainWindow(SplitFluentWindow):
             else:
                 return "Drums", "Full Loops"
         elif detected_category == "Bass":
-            return "Bass", "Bass Loops"
+            # Enhanced bass classification - distinguish 808s from other bass
+            if duration < 3.0 and spectral_centroid < 200:
+                return "Bass", "808"  # Short, very low = likely 808
+            elif spectral_centroid < 150:
+                return "Bass", "808"  # Very low frequency = 808 territory
+            else:
+                return "Bass", "Bass Loops"
         elif detected_category == "Melodic":
             # Use duration and BPM to classify melodic content
             if duration > 8.0:
@@ -1382,8 +1399,7 @@ class MainWindow(SplitFluentWindow):
                 return "Melodic", "Keys"
             elif spectral_centroid > 3000:
                 return "Melodic", "Synth Leads"
-            else:
-                return "Melodic", "Melodic Loops"
+            return "Melodic", "Melodic Loops"
         elif detected_category == "FX":
             return "FX", "Impacts"
         elif detected_category == "Vocals":
@@ -1392,10 +1408,14 @@ class MainWindow(SplitFluentWindow):
         return None
 
     def _classify_by_audio_characteristics(self, duration, spectral_centroid, bpm):
-        """Classify sample based on audio characteristics."""
+        """Classify sample based on audio characteristics with enhanced kick vs 808 logic."""
         if duration < 1.0:  # Very short samples
             if spectral_centroid < 800:
-                return "Drums", "Kicks"
+                # Short low-frequency samples - distinguish kicks from 808s
+                if spectral_centroid > 250:
+                    return "Drums", "Kicks"  # Higher in kick range
+                else:
+                    return "Bass", "808"     # Very low = 808
             elif spectral_centroid > 4000:
                 return "FX", "Impacts"
             else:
@@ -1407,13 +1427,19 @@ class MainWindow(SplitFluentWindow):
                 return "Melodic", "Melodic Loops"
             else:
                 return "FX", "Ambient"
-        else:  # Medium length samples
-            if bpm > 0 and spectral_centroid > 1000:
-                return "Melodic", "Melodic Loops"
-            elif spectral_centroid < 800:
-                return "Bass", "Bass Loops"
+        # Medium length samples (1-8 seconds)
+        elif spectral_centroid < 800:
+            # Medium length low-frequency samples
+            if duration < 3.0 and spectral_centroid < 200:
+                return "Bass", "808"  # Medium length, very low = 808
+            elif duration < 2.0:
+                return "Drums", "Kicks"  # Shorter medium samples = kicks
             else:
-                return "Melodic", "Melodic Loops"
+                return "Bass", "Bass Loops"  # Longer = bass loops
+        elif bpm > 0 and spectral_centroid > 1000:
+            return "Melodic", "Melodic Loops"
+        else:
+            return "Melodic", "Melodic Loops"
 
     def _copy_and_analyze_sample(self, source_path, category, subcategory, analysis_result, auto_organize, current_index, total_files):
         """Copy sample to target directory and analyze if needed. Returns True if successful."""
@@ -1719,9 +1745,16 @@ class MainWindow(SplitFluentWindow):
     def _create_section_label(self, text, margin_top=10):
         """Create a styled section label for settings dialog."""
         section_label = BodyLabel(text)
-        section_label.setFont(get_font_manager().get_header_font(14))
+        section_label.setFont(get_font_manager().get_medium_font(14))
         section_label.setStyleSheet(f"color: rgba(94, 129, 172, 1.0); font-weight: bold; margin-top: {margin_top}px;")
         return section_label
+    
+    def _create_info_label(self, text):
+        """Create a styled info label for settings dialog."""
+        info_label = BodyLabel(text)
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet("color: rgba(255, 255, 255, 0.7); font-size: 10px;")
+        return info_label
 
     def _show_settings_dialog(self):
         """Show settings dialog with database management options."""
@@ -1738,7 +1771,7 @@ class MainWindow(SplitFluentWindow):
         
         # Title
         title = TitleLabel("WAVFin Settings")
-        title.setFont(get_font_manager().get_header_font(16))
+        title.setFont(get_font_manager().get_semibold_font(16))
         layout.addWidget(title)
         
         # Database Management Section
@@ -1751,13 +1784,11 @@ class MainWindow(SplitFluentWindow):
         layout.addWidget(reset_button)
         
         # Info about reset
-        reset_info = BodyLabel(
+        reset_info = self._create_info_label(
             "This will clear all cached sample analysis data, allowing you to re-import "
             "samples with the latest categorization improvements. Your sample files will "
             "not be deleted, only the analysis cache."
         )
-        reset_info.setWordWrap(True)
-        reset_info.setStyleSheet("color: rgba(255, 255, 255, 0.7); font-size: 10px;")
         layout.addWidget(reset_info)
         
         # Auto-categorization Section
@@ -1789,13 +1820,11 @@ class MainWindow(SplitFluentWindow):
         layout.addWidget(diagnostics_button)
         
         # Info about audio diagnostics
-        diagnostics_info = BodyLabel(
+        diagnostics_info = self._create_info_label(
             "Use this to troubleshoot audio playback issues, especially with low frequency "
             "samples like 808s and kicks. The diagnostics will check your audio device "
             "configuration and provide recommendations for optimal bass reproduction."
         )
-        diagnostics_info.setWordWrap(True)
-        diagnostics_info.setStyleSheet("color: rgba(255, 255, 255, 0.7); font-size: 10px;")
         layout.addWidget(diagnostics_info)
         
         layout.addStretch()
@@ -1813,51 +1842,224 @@ class MainWindow(SplitFluentWindow):
         dialog.exec()
 
     def _reset_sample_database(self, parent_dialog):
-        """Reset the sample database by clearing the cache."""
-        if not self._confirm_database_reset(parent_dialog):
+        """Reset the sample database with user-selected options."""
+        reset_option = self._confirm_database_reset(parent_dialog)
+        if reset_option == -1:  # User cancelled
             return
         
         try:
-            self._perform_database_reset()
-            self._show_reset_success(parent_dialog)
+            self._perform_database_reset(reset_option)
+            self._show_reset_success(parent_dialog, reset_option)
         except Exception as e:
             self._show_reset_error(e)
 
     def _confirm_database_reset(self, parent_dialog):
-        """Confirm the database reset action."""
-        msg_box = QMessageBox(parent_dialog)
-        msg_box.setWindowTitle("Reset Sample Database")
-        msg_box.setText("Are you sure you want to reset the sample database?")
-        msg_box.setInformativeText(
-            "This will:\n"
-            "• Clear all cached sample analysis data\n"
-            "• Force re-analysis of all samples when accessed\n"
-            "• Apply the latest categorization improvements\n"
-            "• NOT delete your actual sample files\n\n"
-            "This action cannot be undone."
-        )
-        msg_box.setStandardButtons(
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        msg_box.setDefaultButton(QMessageBox.StandardButton.No)
+        """Confirm the database reset action with options for handling existing files."""
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QRadioButton, QButtonGroup, QPushButton, QHBoxLayout
         
-        return msg_box.exec() == QMessageBox.StandardButton.Yes
+        dialog = QDialog(parent_dialog)
+        dialog.setWindowTitle("Reset Sample Database")
+        dialog.setMinimumSize(500, 400)
+        dialog.setModal(True)
+        
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(15)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        # Title
+        title = BodyLabel("Database Reset Options")
+        title.setFont(get_font_manager().get_semibold_font(16))
+        layout.addWidget(title)
+        
+        # Description
+        desc = BodyLabel(
+            "Choose how to handle the database reset and existing sample files:"
+        )
+        desc.setWordWrap(True)
+        layout.addWidget(desc)
+        
+        # Radio button group for reset options
+        self.reset_group = QButtonGroup()
+        
+        # Option 1: Cache only (current behavior)
+        cache_only_radio = QRadioButton("Clear cache only (keep existing files)")
+        cache_only_info = BodyLabel(
+            "• Clears analysis cache\n"
+            "• Keeps all sample files in place\n"
+            "• Re-adding files will show 'already exists' warnings\n"
+            "• Good for testing new analysis without losing files"
+        )
+        cache_only_info.setStyleSheet("color: rgba(255, 255, 255, 0.7); margin-left: 20px; font-size: 10px;")
+        cache_only_info.setWordWrap(True)
+        
+        # Option 2: Smart reset (recommended)
+        smart_reset_radio = QRadioButton("Smart reset (recommended)")
+        smart_reset_radio.setChecked(True)  # Default selection
+        smart_reset_info = BodyLabel(
+            "• Clears analysis cache\n"
+            "• Scans existing files and re-analyzes them automatically\n"
+            "• No duplicate warnings when re-adding files\n"
+            "• Applies latest categorization to existing samples"
+        )
+        smart_reset_info.setStyleSheet("color: rgba(163, 190, 140, 1.0); margin-left: 20px; font-size: 10px;")
+        smart_reset_info.setWordWrap(True)
+        
+        # Option 3: Full reset (nuclear option)
+        full_reset_radio = QRadioButton("Full reset (delete all sample files)")
+        full_reset_info = BodyLabel(
+            "• Clears analysis cache\n"
+            "• DELETES ALL sample files from the samples directory\n"
+            "• Complete fresh start\n"
+            "• ⚠️ WARNING: This cannot be undone!"
+        )
+        full_reset_info.setStyleSheet("color: rgba(191, 97, 106, 1.0); margin-left: 20px; font-size: 10px;")
+        full_reset_info.setWordWrap(True)
+        
+        # Add radio buttons to group and layout
+        self.reset_group.addButton(cache_only_radio, 0)
+        self.reset_group.addButton(smart_reset_radio, 1)
+        self.reset_group.addButton(full_reset_radio, 2)
+        
+        layout.addWidget(cache_only_radio)
+        layout.addWidget(cache_only_info)
+        layout.addSpacing(10)
+        layout.addWidget(smart_reset_radio)
+        layout.addWidget(smart_reset_info)
+        layout.addSpacing(10)
+        layout.addWidget(full_reset_radio)
+        layout.addWidget(full_reset_info)
+        
+        layout.addStretch()
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        cancel_button = PushButton("Cancel")
+        cancel_button.clicked.connect(dialog.reject)
+        cancel_button.setFixedWidth(100)
+        
+        reset_button = PushButton("Reset Database")
+        reset_button.clicked.connect(dialog.accept)
+        reset_button.setFixedWidth(120)
+        
+        button_layout.addWidget(cancel_button)
+        button_layout.addStretch()
+        button_layout.addWidget(reset_button)
+        layout.addLayout(button_layout)
+        
+        # Store the selected option
+        result = dialog.exec()
+        if result == QDialog.DialogCode.Accepted:
+            return self.reset_group.checkedId()  # Returns 0, 1, or 2
+        else:
+            return -1  # Cancelled
 
-    def _perform_database_reset(self):
-        """Perform the actual database reset."""
-        self.sample_manager.sample_cache.clear()
-        self.sample_manager.save_cache()
-        self.sample_list.clear()
-
-    def _show_reset_success(self, parent_dialog):
-        """Show success message and close dialog."""
+    def _perform_database_reset(self, reset_option):
+        """Perform the actual database reset based on selected option."""
+        from pathlib import Path
+        import shutil
+        
+        if reset_option == 0:  # Cache only
+            self.sample_manager.sample_cache.clear()
+            self.sample_manager.save_cache()
+            self.sample_list.clear()
+            
+        elif reset_option == 1:  # Smart reset (recommended)
+            # Clear cache first
+            self.sample_manager.sample_cache.clear()
+            self.sample_manager.save_cache()
+            self.sample_list.clear()
+            
+            # Re-analyze all existing files
+            self._re_analyze_existing_samples()
+            
+        elif reset_option == 2:  # Full reset (delete files)
+            # Clear cache
+            self.sample_manager.sample_cache.clear()
+            self.sample_manager.save_cache()
+            self.sample_list.clear()
+            
+            # Delete all sample files and directories
+            samples_dir = Path("samples")
+            if samples_dir.exists():
+                shutil.rmtree(samples_dir)
+                samples_dir.mkdir(exist_ok=True)
+            
+            # Recreate the basic category structure
+            self._auto_create_missing_subcategories()
+    
+    def _re_analyze_existing_samples(self):
+        """Re-analyze all existing sample files with improved categorization."""
+        from pathlib import Path
+        
+        samples_dir = Path("samples")
+        if not samples_dir.exists():
+            return
+        
+        total_files = 0
+        processed_files = 0
+        
+        # Count total files first for progress
+        for audio_file in samples_dir.rglob("*"):
+            if audio_file.is_file() and audio_file.suffix.lower() in {'.wav', '.mp3', '.flac', '.aiff', '.aif', '.m4a', '.ogg', '.wma'}:
+                total_files += 1
+        
+        if total_files == 0:
+            return
+        
         self._add_notification(
-            "Database Reset",
-            "Sample database has been reset. Re-import samples to see improved categorization.",
+            "Re-analyzing Samples",
+            f"Re-analyzing {total_files} existing samples with improved categorization...",
+            "info"
+        )
+        
+        # Process each audio file
+        for audio_file in samples_dir.rglob("*"):
+            if audio_file.is_file() and audio_file.suffix.lower() in {'.wav', '.mp3', '.flac', '.aiff', '.aif', '.m4a', '.ogg', '.wma'}:
+                try:
+                    # Analyze the sample
+                    self.sample_manager.analyze_sample(str(audio_file))
+                    processed_files += 1
+                    
+                    # Show progress every 10 files
+                    if processed_files % 10 == 0 or processed_files == total_files:
+                        self._add_notification(
+                            "Re-analysis Progress",
+                            f"Processed {processed_files}/{total_files} samples",
+                            "info"
+                        )
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to re-analyze {audio_file}: {e}")
+        
+        self._add_notification(
+            "Re-analysis Complete",
+            f"Successfully re-analyzed {processed_files} samples with improved categorization",
+            "success"
+        )
+
+    def _show_reset_success(self, parent_dialog, reset_option):
+        """Show success message and close dialog."""
+        if reset_option == 0:  # Cache only
+            message = "Sample database cache cleared. Re-import samples to see improved categorization."
+        elif reset_option == 1:  # Smart reset
+            message = "Sample database reset and existing files re-analyzed with improved categorization."
+        elif reset_option == 2:  # Full reset
+            message = "Sample database and all files completely reset. You can now import samples fresh."
+        else:
+            message = "Sample database has been reset."
+        
+        self._add_notification(
+            "Database Reset Complete",
+            message,
             "success"
         )
         parent_dialog.accept()
-        logger.info("Sample database reset successfully")
+        
+        # Refresh the UI
+        self.populate_categories()
+        
+        logger.info(f"Sample database reset successfully (option {reset_option})")
 
     def _show_reset_error(self, error):
         """Show error message for reset failure."""
@@ -2002,55 +2204,36 @@ class MainWindow(SplitFluentWindow):
             self.notification_flash_state = not self.notification_flash_state
             self._set_info_button_style(self.notification_flash_state)
     
+    def _create_tool_button_style(self, base_color):
+        """Create a ToolButton style with the given base color."""
+        return f"""
+            ToolButton {{
+                border-radius: 12px;
+                border: 2px solid transparent;
+                background-color: {base_color}0.8);
+                color: white;
+                outline: none;
+            }}
+            ToolButton:hover {{
+                background-color: {base_color}1.0);
+                border: 2px solid {base_color}0.3);
+                outline: none;
+            }}
+            ToolButton:pressed {{
+                background-color: {base_color}0.6);
+                outline: none;
+            }}
+            ToolButton:focus {{
+                outline: none;
+            }}
+        """
+    
     def _set_info_button_style(self, is_red):
         """Set the info button style - red for notifications, blue for normal."""
-        if is_red:
-            # Nord red color for notifications
-            style = """
-                ToolButton {
-                    border-radius: 12px;
-                    border: 2px solid transparent;
-                    background-color: rgba(191, 97, 106, 0.8);
-                    color: white;
-                    outline: none;
-                }
-                ToolButton:hover {
-                    background-color: rgba(191, 97, 106, 1.0);
-                    border: 2px solid rgba(191, 97, 106, 0.3);
-                    outline: none;
-                }
-                ToolButton:pressed {
-                    background-color: rgba(191, 97, 106, 0.6);
-                    outline: none;
-                }
-                ToolButton:focus {
-                    outline: none;
-                }
-            """
-        else:
-            # Normal Nord blue color
-            style = """
-                ToolButton {
-                    border-radius: 12px;
-                    border: 2px solid transparent;
-                    background-color: rgba(94, 129, 172, 0.8);
-                    color: white;
-                    outline: none;
-                }
-                ToolButton:hover {
-                    background-color: rgba(94, 129, 172, 1.0);
-                    border: 2px solid rgba(94, 129, 172, 0.3);
-                    outline: none;
-                }
-                ToolButton:pressed {
-                    background-color: rgba(94, 129, 172, 0.6);
-                    outline: none;
-                }
-                ToolButton:focus {
-                    outline: none;
-                }
-            """
+        # Nord red color for notifications, blue for normal
+        base_color = "rgba(191, 97, 106, " if is_red else "rgba(94, 129, 172, "
         
+        style = self._create_tool_button_style(base_color)
         setCustomStyleSheet(self.info_button, style, style)
 
     def _show_notification_window(self):
@@ -2117,7 +2300,7 @@ class AudioDiagnosticsDialog(QDialog):
         
         # Title
         title = TitleLabel("Audio System Diagnostics")
-        title.setFont(get_font_manager().get_header_font(16))
+        title.setFont(get_font_manager().get_semibold_font(16))
         layout.addWidget(title)
         
         # Scroll area for content
@@ -2162,7 +2345,7 @@ class AudioDiagnosticsDialog(QDialog):
     def _add_section(self, layout, title, content):
         """Add a section with title and content."""
         section_title = BodyLabel(title)
-        section_title.setFont(get_font_manager().get_header_font(14))
+        section_title.setFont(get_font_manager().get_medium_font(14))
         section_title.setStyleSheet("color: rgba(94, 129, 172, 1.0); font-weight: bold; margin-bottom: 5px;")
         layout.addWidget(section_title)
         
@@ -2181,18 +2364,25 @@ class AudioDiagnosticsDialog(QDialog):
         
         layout.addWidget(content_widget)
     
+    def _create_styled_label(self, text, style):
+        """Create a styled label with the given text and style."""
+        label = BodyLabel(text)
+        label.setWordWrap(True)
+        label.setStyleSheet(style)
+        return label
+    
     def _create_device_info(self):
         """Create device information widget."""
-        info_text = []
-        
         if "error" in self.device_info:
-            info_text.append(f"❌ Error: {self.device_info['error']}")
+            info_text = [f"❌ Error: {self.device_info['error']}"]
         else:
-            info_text.append(f"🎵 Device: {self.device_info.get('device_name', 'Unknown')}")
-            info_text.append(f"📊 Sample Rate: {self.device_info.get('preferred_sample_rate', 'Unknown')} Hz")
-            info_text.append(f"🔊 Channels: {self.device_info.get('preferred_channels', 'Unknown')}")
-            info_text.append(f"🎛️ Format: {self.device_info.get('preferred_sample_format', 'Unknown')}")
-            info_text.append(f"🔉 Current Volume: {self.device_info.get('current_volume', 0):.1%}")
+            info_text = [
+                f"🎵 Device: {self.device_info.get('device_name', 'Unknown')}",
+                f"📊 Sample Rate: {self.device_info.get('preferred_sample_rate', 'Unknown')} Hz",
+                f"🔊 Channels: {self.device_info.get('preferred_channels', 'Unknown')}",
+                f"🎛️ Format: {self.device_info.get('preferred_sample_format', 'Unknown')}",
+                f"🔉 Current Volume: {self.device_info.get('current_volume', 0):.1%}"
+            ]
             
             if supported_rates := self.device_info.get('supported_sample_rates'):
                 rates_str = ", ".join(map(str, sorted(supported_rates)[:5]))
@@ -2200,32 +2390,17 @@ class AudioDiagnosticsDialog(QDialog):
                     rates_str += "..."
                 info_text.append(f"📈 Supported Rates: {rates_str} Hz")
         
-        label = BodyLabel("\n".join(info_text))
-        label.setWordWrap(True)
-        label.setStyleSheet("color: rgba(255, 255, 255, 0.9); line-height: 1.4;")
-        return label
+        return self._create_styled_label("\n".join(info_text), "color: rgba(255, 255, 255, 0.9); line-height: 1.4;")
     
     def _create_issues_list(self):
         """Create issues list widget."""
-        issues_text = []
-        for issue in self.diagnosis["issues"]:
-            issues_text.append(f"⚠️ {issue}")
-        
-        label = BodyLabel("\n".join(issues_text))
-        label.setWordWrap(True)
-        label.setStyleSheet("color: rgba(235, 203, 139, 1.0); line-height: 1.4;")
-        return label
+        issues_text = [f"⚠️ {issue}" for issue in self.diagnosis["issues"]]
+        return self._create_styled_label("\n".join(issues_text), "color: rgba(235, 203, 139, 1.0); line-height: 1.4;")
     
     def _create_recommendations_list(self):
         """Create recommendations list widget."""
-        rec_text = []
-        for rec in self.diagnosis["recommendations"]:
-            rec_text.append(f"💡 {rec}")
-        
-        label = BodyLabel("\n".join(rec_text))
-        label.setWordWrap(True)
-        label.setStyleSheet("color: rgba(163, 190, 140, 1.0); line-height: 1.4;")
-        return label
+        rec_text = [f"💡 {rec}" for rec in self.diagnosis["recommendations"]]
+        return self._create_styled_label("\n".join(rec_text), "color: rgba(163, 190, 140, 1.0); line-height: 1.4;")
     
     def _create_bass_info(self):
         """Create bass-specific information widget."""
@@ -2240,10 +2415,7 @@ class AudioDiagnosticsDialog(QDialog):
             "• Consider using a dedicated audio interface or external DAC"
         ]
         
-        label = BodyLabel("\n".join(bass_info))
-        label.setWordWrap(True)
-        label.setStyleSheet("color: rgba(255, 255, 255, 0.9); line-height: 1.4;")
-        return label
+        return self._create_styled_label("\n".join(bass_info), "color: rgba(255, 255, 255, 0.9); line-height: 1.4;")
 
 def main():
     """Main application entry point."""

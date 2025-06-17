@@ -110,13 +110,13 @@ class PlaybackControls(QWidget):
         
         # Time display - smaller font
         self.time_label = BodyLabel("00:00 / 00:00")
-        self.time_label.setFont(get_font_manager().get_body_font(8))  # Smaller font
+        self.time_label.setFont(get_font_manager().get_font(8))  # Smaller font
         self.time_label.setStyleSheet("color: rgba(255, 255, 255, 0.8);")
         info_layout.addWidget(self.time_label)
         
         # Sample info - smaller font and more subtle
         self.sample_info_label = BodyLabel("No sample loaded")
-        self.sample_info_label.setFont(get_font_manager().get_body_font(7))  # Even smaller font
+        self.sample_info_label.setFont(get_font_manager().get_light_font(7))  # Even smaller font
         self.sample_info_label.setStyleSheet("color: rgba(255, 255, 255, 0.5);")
         info_layout.addWidget(self.sample_info_label)
         

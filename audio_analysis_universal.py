@@ -486,7 +486,7 @@ class UniversalAudioAnalyzer:
         return "unknown"
 
     def _classify_by_frequency_safe(self, y: np.ndarray, sr: int) -> str:
-        """Safe frequency content analysis."""
+        """Safe frequency content analysis with kick vs 808 detection."""
         import numpy as np
         
         try:
@@ -498,35 +498,92 @@ class UniversalAudioAnalyzer:
             positive_magnitude = magnitude[:len(magnitude)//2]
             
             # Calculate energy in frequency bands
-            bass_mask = positive_freqs < 250
-            mid_mask = (positive_freqs >= 250) & (positive_freqs < 4000)
-            high_mask = positive_freqs >= 4000
+            sub_bass_mask = positive_freqs < 100    # Sub-bass (808 territory)
+            bass_mask = (positive_freqs >= 100) & (positive_freqs < 250)    # Bass/kick fundamentals
+            low_mid_mask = (positive_freqs >= 250) & (positive_freqs < 1000)  # Low mids
+            mid_mask = (positive_freqs >= 1000) & (positive_freqs < 4000)     # Mids
+            high_mask = positive_freqs >= 4000      # Highs
             
+            sub_bass_energy = np.sum(positive_magnitude[sub_bass_mask])
             bass_energy = np.sum(positive_magnitude[bass_mask])
+            low_mid_energy = np.sum(positive_magnitude[low_mid_mask])
             mid_energy = np.sum(positive_magnitude[mid_mask])
             high_energy = np.sum(positive_magnitude[high_mask])
             
-            total_energy = bass_energy + mid_energy + high_energy
+            total_energy = sub_bass_energy + bass_energy + low_mid_energy + mid_energy + high_energy
             
             if total_energy == 0:
                 return "unknown"
             
-            bass_ratio = bass_energy / total_energy
+            # Calculate ratios
+            low_freq_ratio = (sub_bass_energy + bass_energy) / total_energy
             high_ratio = high_energy / total_energy
+            mid_ratio = (low_mid_energy + mid_energy) / total_energy
             
-            if bass_ratio > 0.6:
-                return "Bass"
+            # Enhanced classification
+            if low_freq_ratio > 0.6:  # Dominant low frequency content
+                # Use enhanced kick vs 808 detection for low frequency samples
+                duration = len(y) / sr
+                
+                # Simple heuristics for when librosa isn't available
+                # Calculate spectral centroid manually
+                if np.sum(positive_magnitude) > 0:
+                    spectral_centroid = np.sum(positive_freqs * positive_magnitude) / np.sum(positive_magnitude)
+                else:
+                    spectral_centroid = 0
+                
+                # Simple onset detection
+                onset_strength = self._estimate_onset_strength_safe(y)
+                
+                # Use the kick vs 808 classifier
+                if self._is_kick_vs_808(y, sr, duration, onset_strength, spectral_centroid):
+                    return "Drums"  # Likely a kick
+                else:
+                    return "Bass"   # Likely an 808 or bass
             elif high_ratio > 0.4:
                 return "FX"
-            else:
+            elif mid_ratio > 0.5:
                 return "Melodic"
+            else:
+                return "Drums"  # Spread energy = likely percussive
                 
         except Exception as e:
             logger.warning(f"Frequency analysis failed: {e}")
             return "unknown"
     
+    def _estimate_onset_strength_safe(self, y: np.ndarray) -> float:
+        """Estimate onset strength without librosa."""
+        import numpy as np
+        
+        try:
+            # Simple energy-based onset detection
+            window_size = self.hop_length
+            energy_diff = []
+            prev_energy = 0
+            
+            for i in range(0, len(y) - window_size, window_size):
+                window = y[i:i + window_size]
+                energy = np.sum(window**2)
+                
+                if i > 0:
+                    diff = max(0, energy - prev_energy)
+                    energy_diff.append(diff)
+                
+                prev_energy = energy
+            
+            if len(energy_diff) == 0:
+                return 0.0
+            
+            # Normalize and return average onset strength
+            energy_diff = np.array(energy_diff)
+            return float(np.mean(energy_diff)) if len(energy_diff) > 0 else 0.0
+            
+        except Exception as e:
+            logger.warning(f"Safe onset strength estimation failed: {e}")
+            return 0.0
+    
     def _classify_by_spectral_features_enhanced(self, y: np.ndarray, sr: int) -> str:
-        """Enhanced spectral features analysis."""
+        """Enhanced spectral features analysis with improved kick vs 808 detection."""
         try:
             import librosa
             import numpy as np
@@ -543,9 +600,16 @@ class UniversalAudioAnalyzer:
             # Calculate onset strength for percussive detection
             onset_strength = np.mean(librosa.onset.onset_strength(y=y, sr=sr))
             
-            # More sophisticated classification with improved logic
+            # Duration for kick vs 808 distinction
+            duration = len(y) / sr
+            
+            # Enhanced classification with kick vs 808 distinction
             if spectral_centroid < 600:  # Very low frequency content
-                return "Bass"
+                # Distinguish between kicks and 808s based on multiple factors
+                if self._is_kick_vs_808(y, sr, duration, onset_strength, spectral_centroid):
+                    return "Drums"  # This is likely a kick
+                else:
+                    return "Bass"   # This is likely an 808 or bass
             elif onset_strength > 0.5 and zero_crossing_rate > 0.05:  # Strong onsets = drums
                 return "Drums"
             elif spectral_rolloff > 8000 and zero_crossing_rate > 0.1:  # High frequency with noise = FX
@@ -562,6 +626,84 @@ class UniversalAudioAnalyzer:
         except Exception as e:
             logger.warning(f"Enhanced spectral features analysis failed: {e}")
             return "unknown"
+    
+    def _is_kick_vs_808(self, y: np.ndarray, sr: int, duration: float, onset_strength: float, spectral_centroid: float) -> bool:
+        """Determine if a low-frequency sample is a kick drum vs an 808/bass.
+        
+        Returns True if it's likely a kick, False if it's likely an 808/bass.
+        """
+        try:
+            import numpy as np
+            
+            # Factors that indicate a kick drum:
+            # 1. Shorter duration (kicks are typically < 1.5 seconds)
+            # 2. Strong attack/transient at the beginning
+            # 3. Quick decay (energy drops rapidly)
+            # 4. Less sustained harmonic content
+            
+            kick_indicators = 0
+            total_factors = 5
+            
+            # Factor 1: Duration (kicks are shorter)
+            if duration < 1.5:
+                kick_indicators += 1
+            elif duration > 3.0:
+                kick_indicators -= 1  # Very likely 808 if long
+            
+            # Factor 2: Strong onset (kicks have sharp attack)
+            if onset_strength > 0.4:
+                kick_indicators += 1
+            
+            # Factor 3: Energy decay analysis
+            # Divide into early (attack) and late (sustain) portions
+            early_samples = int(0.1 * sr)  # First 100ms
+            late_start = int(0.3 * sr)     # After 300ms
+            
+            if len(y) > late_start:
+                early_energy = np.mean(y[:early_samples]**2) if early_samples < len(y) else np.mean(y**2)
+                late_energy = np.mean(y[late_start:]**2)
+                
+                # Kicks have rapid decay (late energy much lower than early)
+                if late_energy < early_energy * 0.3:  # 70% energy drop
+                    kick_indicators += 1
+                elif late_energy > early_energy * 0.7:  # Sustained energy (808-like)
+                    kick_indicators -= 1
+            
+            # Factor 4: Spectral characteristics
+            # Kicks often have some mid-frequency content from the attack
+            if 200 <= spectral_centroid <= 500:  # Sweet spot for kick fundamentals
+                kick_indicators += 1
+            elif spectral_centroid < 150:  # Very low = more likely 808
+                kick_indicators -= 1
+            
+            # Factor 5: Harmonic content analysis
+            # 808s often have more sustained harmonics
+            fft = np.fft.fft(y)
+            magnitude = np.abs(fft)
+            freqs = np.fft.fftfreq(len(y), 1/sr)
+            
+            positive_freqs = freqs[:len(freqs)//2]
+            positive_magnitude = magnitude[:len(magnitude)//2]
+            
+            # Check for harmonic peaks (808s often have multiple harmonics)
+            sub_bass_energy = np.sum(positive_magnitude[positive_freqs < 100])
+            bass_energy = np.sum(positive_magnitude[(positive_freqs >= 100) & (positive_freqs < 250)])
+            
+            total_low_energy = sub_bass_energy + bass_energy
+            if total_low_energy > 0:
+                bass_ratio = bass_energy / total_low_energy
+                if bass_ratio > 0.6:  # More energy in 100-250Hz range = kick-like
+                    kick_indicators += 1
+                elif bass_ratio < 0.3:  # More sub-bass = 808-like
+                    kick_indicators -= 1
+            
+            # Decision: if more than half the factors indicate kick
+            return kick_indicators > (total_factors / 2)
+            
+        except Exception as e:
+            logger.warning(f"Kick vs 808 analysis failed: {e}")
+            # Fallback: short duration = kick, long = 808
+            return duration < 2.0
 
     def _fallback_classification(self, y: np.ndarray, sr: int) -> str:
         """Fallback classification based on basic audio characteristics."""
