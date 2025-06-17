@@ -154,7 +154,8 @@ class MaterialSymbolsIcon:
         'DRUMS': '\ue40e',
         'PIANO': '\ue3af',
         'VOCALS': '\ue3c9',
-        'EFFECTS': '\ue3ba'
+        'EFFECTS': '\ue3ba',
+        'EDIT': '\ue3c9'
     }
     
     def __init__(self, symbol_name, size=24):

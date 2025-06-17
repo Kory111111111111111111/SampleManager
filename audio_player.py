@@ -81,62 +81,72 @@ class AudioPlayer(QObject):
             
             # Use higher sample rates if supported (better for bass reproduction)
             try:
-                supported_rates = default_device.supportedSampleRates()
-                if supported_rates is not None:
-                    # Prefer 48kHz or 44.1kHz for better low frequency response
-                    target_rates = [48000, 44100, 96000, 88200]
-                    selected_rate = preferred_format.sampleRate()
-                    
-                    for rate in target_rates:
-                        if rate in supported_rates:
-                            selected_rate = rate
-                            break
-                    
-                    optimized_format.setSampleRate(selected_rate)
-                    logger.info(f"Using sample rate: {selected_rate} Hz for better bass reproduction")
-                else:
-                    optimized_format.setSampleRate(preferred_format.sampleRate())
+                # In PyQt6, we test each rate to see if it's supported
+                target_rates = [48000, 44100, 96000, 88200]
+                selected_rate = preferred_format.sampleRate()  # Default fallback
+                
+                # Test each rate to see if it's supported
+                for rate in target_rates:
+                    test_format = QAudioFormat(preferred_format)
+                    test_format.setSampleRate(rate)
+                    if default_device.isFormatSupported(test_format):
+                        selected_rate = rate
+                        break
+                
+                optimized_format.setSampleRate(selected_rate)
+                logger.info(f"Using sample rate: {selected_rate} Hz for better bass reproduction")
+                
             except (AttributeError, RuntimeError) as e:
-                logger.warning(f"Could not get supported sample rates, using default: {e}")
+                logger.warning(f"Could not optimize sample rate, using default: {e}")
                 optimized_format.setSampleRate(preferred_format.sampleRate())
             
             # Use 16-bit or 32-bit depth for better dynamic range
             try:
-                supported_formats = default_device.supportedSampleFormats()
-                if supported_formats is not None:
-                    # Prefer higher bit depths for better low frequency detail
-                    if QAudioFormat.SampleFormat.Float in supported_formats:
-                        optimized_format.setSampleFormat(QAudioFormat.SampleFormat.Float)
-                        logger.info("Using Float sample format for better dynamic range")
-                    elif QAudioFormat.SampleFormat.Int32 in supported_formats:
-                        optimized_format.setSampleFormat(QAudioFormat.SampleFormat.Int32)
-                        logger.info("Using Int32 sample format for better dynamic range")
-                    elif QAudioFormat.SampleFormat.Int16 in supported_formats:
-                        optimized_format.setSampleFormat(QAudioFormat.SampleFormat.Int16)
-                        logger.info("Using Int16 sample format")
-                    else:
-                        optimized_format.setSampleFormat(preferred_format.sampleFormat())
-                else:
-                    optimized_format.setSampleFormat(preferred_format.sampleFormat())
+                # Test different sample formats to find the best supported one
+                target_formats = [
+                    QAudioFormat.SampleFormat.Float,
+                    QAudioFormat.SampleFormat.Int32,
+                    QAudioFormat.SampleFormat.Int16
+                ]
+                
+                selected_format = preferred_format.sampleFormat()  # Default fallback
+                format_names = ["Float", "Int32", "Int16"]
+                
+                for fmt, name in zip(target_formats, format_names):
+                    test_format = QAudioFormat(preferred_format)
+                    test_format.setSampleFormat(fmt)
+                    if default_device.isFormatSupported(test_format):
+                        selected_format = fmt
+                        logger.info(f"Using {name} sample format for better dynamic range")
+                        break
+                
+                optimized_format.setSampleFormat(selected_format)
+                
             except (AttributeError, RuntimeError) as e:
-                logger.warning(f"Could not get supported sample formats, using default: {e}")
+                logger.warning(f"Could not optimize sample format, using default: {e}")
                 optimized_format.setSampleFormat(preferred_format.sampleFormat())
             
             # Use stereo for better bass imaging
             try:
-                supported_channels = default_device.supportedChannelConfigurations()
-                if supported_channels is not None:
-                    if 2 in supported_channels:  # Stereo
-                        optimized_format.setChannelCount(2)
-                        logger.info("Using stereo output for better bass imaging")
-                    elif 1 in supported_channels:  # Mono
-                        optimized_format.setChannelCount(1)
-                    else:
-                        optimized_format.setChannelCount(preferred_format.channelCount())
-                else:
-                    optimized_format.setChannelCount(preferred_format.channelCount())
+                # Test stereo and mono channel configurations
+                target_channels = [2, 1]  # Prefer stereo, fallback to mono
+                selected_channels = preferred_format.channelCount()  # Default fallback
+                
+                for channels in target_channels:
+                    test_format = QAudioFormat(preferred_format)
+                    test_format.setChannelCount(channels)
+                    if default_device.isFormatSupported(test_format):
+                        selected_channels = channels
+                        if channels == 2:
+                            logger.info("Using stereo output for better bass imaging")
+                        else:
+                            logger.info("Using mono output")
+                        break
+                
+                optimized_format.setChannelCount(selected_channels)
+                
             except (AttributeError, RuntimeError) as e:
-                logger.warning(f"Could not get supported channel configurations, using default: {e}")
+                logger.warning(f"Could not optimize channel configuration, using default: {e}")
                 optimized_format.setChannelCount(preferred_format.channelCount())
             
             # Try to set the optimized format
@@ -544,37 +554,51 @@ class AudioPlayer(QObject):
                 "current_volume": self.audio_output.volume() if hasattr(self, 'audio_output') else 0.0
             }
             
-            # Safely get supported sample rates
+            # Test common sample rates for compatibility info
             try:
-                supported_rates = default_device.supportedSampleRates()
-                if supported_rates is not None:
-                    info["supported_sample_rates"] = list(supported_rates)
-                else:
-                    info["supported_sample_rates"] = []
+                test_rates = [44100, 48000, 88200, 96000, 192000]
+                supported_rates = []
+                for rate in test_rates:
+                    test_format = QAudioFormat(preferred_format)
+                    test_format.setSampleRate(rate)
+                    if default_device.isFormatSupported(test_format):
+                        supported_rates.append(rate)
+                info["supported_sample_rates"] = supported_rates
             except (AttributeError, RuntimeError) as e:
-                logger.warning(f"Could not get supported sample rates: {e}")
+                logger.warning(f"Could not test sample rates: {e}")
                 info["supported_sample_rates"] = []
             
-            # Safely get supported channel configurations
+            # Test common channel configurations
             try:
-                supported_channels = default_device.supportedChannelConfigurations()
-                if supported_channels is not None:
-                    info["supported_channel_configs"] = list(supported_channels)
-                else:
-                    info["supported_channel_configs"] = []
+                test_channels = [1, 2, 4, 6, 8]
+                supported_channels = []
+                for channels in test_channels:
+                    test_format = QAudioFormat(preferred_format)
+                    test_format.setChannelCount(channels)
+                    if default_device.isFormatSupported(test_format):
+                        supported_channels.append(channels)
+                info["supported_channel_configs"] = supported_channels
             except (AttributeError, RuntimeError) as e:
-                logger.warning(f"Could not get supported channel configurations: {e}")
+                logger.warning(f"Could not test channel configurations: {e}")
                 info["supported_channel_configs"] = []
             
-            # Safely get supported sample formats
+            # Test common sample formats
             try:
-                supported_formats = default_device.supportedSampleFormats()
-                if supported_formats is not None:
-                    info["supported_sample_formats"] = [str(fmt) for fmt in supported_formats]
-                else:
-                    info["supported_sample_formats"] = []
+                from PyQt6.QtMultimedia import QAudioFormat
+                test_formats = [
+                    QAudioFormat.SampleFormat.Int16,
+                    QAudioFormat.SampleFormat.Int32,
+                    QAudioFormat.SampleFormat.Float
+                ]
+                supported_formats = []
+                for fmt in test_formats:
+                    test_format = QAudioFormat(preferred_format)
+                    test_format.setSampleFormat(fmt)
+                    if default_device.isFormatSupported(test_format):
+                        supported_formats.append(str(fmt))
+                info["supported_sample_formats"] = supported_formats
             except (AttributeError, RuntimeError) as e:
-                logger.warning(f"Could not get supported sample formats: {e}")
+                logger.warning(f"Could not test sample formats: {e}")
                 info["supported_sample_formats"] = []
             
             # Add bass-specific recommendations

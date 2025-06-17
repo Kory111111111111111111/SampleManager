@@ -108,16 +108,16 @@ class PlaybackControls(QWidget):
         info_layout.setSpacing(15)  # Good spacing between time and sample info
         info_layout.setContentsMargins(2, 0, 2, 0)  # Small horizontal margins
         
-        # Time display - smaller font
+        # Time display - bigger font
         self.time_label = BodyLabel("00:00 / 00:00")
-        self.time_label.setFont(get_font_manager().get_font(8))  # Smaller font
-        self.time_label.setStyleSheet("color: rgba(255, 255, 255, 0.8);")
+        self.time_label.setFont(get_font_manager().get_medium_font(13))  # Increased from 11 to 13 with medium weight for better readability
+        self.time_label.setStyleSheet("color: rgba(255, 255, 255, 0.9);")  # Slightly more opaque for better visibility
         info_layout.addWidget(self.time_label)
         
-        # Sample info - smaller font and more subtle
+        # Sample info - bigger font and more readable
         self.sample_info_label = BodyLabel("No sample loaded")
-        self.sample_info_label.setFont(get_font_manager().get_light_font(7))  # Even smaller font
-        self.sample_info_label.setStyleSheet("color: rgba(255, 255, 255, 0.5);")
+        self.sample_info_label.setFont(get_font_manager().get_font(11))  # Increased from 10 to 11
+        self.sample_info_label.setStyleSheet("color: rgba(255, 255, 255, 0.6);")  # Slightly more opaque for better visibility
         info_layout.addWidget(self.sample_info_label)
         
         # Add stretch to push everything to the left

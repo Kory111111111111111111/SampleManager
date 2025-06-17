@@ -108,6 +108,9 @@ class UniversalAudioAnalyzer:
         self.cpu_detector = CPUDetector()
         self.config = self.cpu_detector.get_recommended_config()
         
+        # Cache expensive CPU brand lookup
+        self._cached_cpu_brand = self.cpu_detector.cpu_info.get('brand', 'Unknown')
+        
         # Set environment variables based on CPU
         for key, value in self.config['environment_vars'].items():
             os.environ[key] = value
@@ -122,20 +125,22 @@ class UniversalAudioAnalyzer:
         # Category classification mappings
         self.category_keywords = {
             'Bass': ['bass', '808', 'sub', 'low'],
-            'Drums': ['kick', 'snare', 'hat', 'cymbal', 'perc', 'drum', 'clap'],
+            'Drums': ['kick', 'snare', 'hat', 'hh', 'cymbal', 'perc', 'drum', 'clap', 'tom', 'rim', 'crash', 'ride'],
             'FX': ['fx', 'effect', 'sweep', 'riser', 'impact', 'ambient', 'foley'],
             'Melodic': ['lead', 'melody', 'synth', 'key', 'pad', 'pluck', 'chord'],
             'Vocals': ['vocal', 'voice', 'chop', 'phrase', 'word']
         }
         
-        # Improved drum type detection
+        # Improved drum type detection with separated hi-hat types
         self.drum_type_keywords = {
             'kick': ['kick', 'bd', 'bassdrum'],
             'snare': ['snare', 'sd'],
             'clap': ['clap', 'handclap'],
-            'hihat': ['hat', 'hh', 'hihat', 'hi-hat'],
-            'cymbal': ['cymbal', 'crash', 'ride'],
-            'percussion': ['perc', 'shaker', 'tambourine', 'conga']
+            'closed_hihat': ['closed hat', 'closehat', 'closed_hat', 'chh', 'cl hat', 'clhat', 'close hat'],
+            'open_hihat': ['open hat', 'openhat', 'open_hat', 'ohh', 'op hat', 'ophat'],
+            'hihat': ['hat', 'hh', 'hihat', 'hi-hat', 'hi_hat'],  # Generic hi-hat fallback
+            'cymbal': ['cymbal', 'crash', 'ride', 'splash'],
+            'percussion': ['perc', 'shaker', 'tambourine', 'conga', 'tom', 'rim']
         }
         
         # Key profiles for key detection
@@ -215,6 +220,8 @@ class UniversalAudioAnalyzer:
             duration = len(y) / sr
             
             # Perform analysis using available methods
+            category = self._classify_category_universal(file_path, y, sr)
+            
             result = {
                 "file_path": file_path,
                 "duration": duration,
@@ -224,7 +231,7 @@ class UniversalAudioAnalyzer:
                 
                 # Universal analysis
                 "sample_type": self._determine_sample_type_universal(y, sr),
-                "category": self._classify_category_universal(file_path, y, sr),
+                "category": category,
                 "bpm": self._detect_bpm_universal(y, sr),
                 "key": self._detect_key_universal(y, sr),
                 "characteristics": self._analyze_characteristics_universal(y, sr),
@@ -232,6 +239,17 @@ class UniversalAudioAnalyzer:
                 "confidence_scores": {},
                 "error": None
             }
+            
+            # Add hi-hat subcategory classification if it's a drum sample with hi-hat keywords
+            if category.lower() == "drums":
+                file_lower = file_path.lower()
+                hihat_keywords = ['hat', 'hh', 'hihat', 'hi-hat', 'hi_hat', 'closed hat', 'closehat', 'closed_hat', 
+                                'chh', 'cl hat', 'clhat', 'close hat', 'open hat', 'openhat', 'open_hat', 
+                                'ohh', 'op hat', 'ophat']
+                
+                if any(keyword in file_lower for keyword in hihat_keywords):
+                    hihat_type = self._classify_hihat_type(y, sr, file_path)
+                    result["hihat_subcategory"] = hihat_type
             
             # Calculate overall confidence
             result["overall_confidence"] = self._calculate_confidence_universal(result)
@@ -520,7 +538,7 @@ class UniversalAudioAnalyzer:
             high_ratio = high_energy / total_energy
             mid_ratio = (low_mid_energy + mid_energy) / total_energy
             
-            # Enhanced classification
+            # Enhanced classification with better hi-hat detection
             if low_freq_ratio > 0.6:  # Dominant low frequency content
                 # Use enhanced kick vs 808 detection for low frequency samples
                 duration = len(y) / sr
@@ -541,7 +559,16 @@ class UniversalAudioAnalyzer:
                 else:
                     return "Bass"   # Likely an 808 or bass
             elif high_ratio > 0.4:
-                return "FX"
+                # Check if this might be a hi-hat before classifying as FX
+                # Hi-hats often have high frequency content but short duration and sharp transients
+                duration = len(y) / sr
+                onset_strength = self._estimate_onset_strength_safe(y)
+                
+                # Hi-hats are typically short (< 1 second) with strong onsets
+                if duration < 1.0 and onset_strength > 0.3:
+                    return "Drums"  # Likely a hi-hat or cymbal
+                else:
+                    return "FX"     # Likely an effect
             elif mid_ratio > 0.5:
                 return "Melodic"
             else:
@@ -603,7 +630,7 @@ class UniversalAudioAnalyzer:
             # Duration for kick vs 808 distinction
             duration = len(y) / sr
             
-            # Enhanced classification with kick vs 808 distinction
+            # Enhanced classification with kick vs 808 distinction and better hi-hat detection
             if spectral_centroid < 600:  # Very low frequency content
                 # Distinguish between kicks and 808s based on multiple factors
                 if self._is_kick_vs_808(y, sr, duration, onset_strength, spectral_centroid):
@@ -612,8 +639,14 @@ class UniversalAudioAnalyzer:
                     return "Bass"   # This is likely an 808 or bass
             elif onset_strength > 0.5 and zero_crossing_rate > 0.05:  # Strong onsets = drums
                 return "Drums"
-            elif spectral_rolloff > 8000 and zero_crossing_rate > 0.1:  # High frequency with noise = FX
-                return "FX"
+            elif spectral_rolloff > 8000 and zero_crossing_rate > 0.1:  # High frequency with noise
+                # Could be hi-hat or FX - check duration and onset pattern
+                if duration < 1.0 and onset_strength > 0.4:
+                    return "Drums"  # Likely hi-hat or cymbal
+                else:
+                    return "FX"     # Likely effect
+            elif spectral_centroid > 4000 and duration < 0.8 and onset_strength > 0.3:  # High freq, short, sharp = hi-hat
+                return "Drums"
             elif 1000 <= spectral_centroid <= 3000 and onset_strength < 0.3:  # Mid-range tonal content
                 return "Melodic"
             elif spectral_centroid > 3000 and zero_crossing_rate < 0.08:  # High but smooth = vocals
@@ -704,6 +737,94 @@ class UniversalAudioAnalyzer:
             logger.warning(f"Kick vs 808 analysis failed: {e}")
             # Fallback: short duration = kick, long = 808
             return duration < 2.0
+    
+    def _classify_hihat_type(self, y: np.ndarray, sr: int, file_path: str) -> str:
+        """Classify whether a hi-hat is closed or open based on audio characteristics and filename."""
+        try:
+            import numpy as np
+            
+            # First check filename for explicit indicators
+            file_lower = file_path.lower()
+            
+            # Check for explicit closed hi-hat indicators
+            closed_keywords = ['closed hat', 'closehat', 'closed_hat', 'chh', 'cl hat', 'clhat', 'close hat']
+            if any(keyword in file_lower for keyword in closed_keywords):
+                return "Closed Hi-Hats"
+            
+            # Check for explicit open hi-hat indicators
+            open_keywords = ['open hat', 'openhat', 'open_hat', 'ohh', 'op hat', 'ophat']
+            if any(keyword in file_lower for keyword in open_keywords):
+                return "Open Hi-Hats"
+            
+            # If no explicit indicators, analyze audio characteristics
+            duration = len(y) / sr
+            
+            # Calculate spectral characteristics
+            fft = np.fft.fft(y)
+            magnitude = np.abs(fft)
+            freqs = np.fft.fftfreq(len(y), 1/sr)
+            
+            positive_freqs = freqs[:len(freqs)//2]
+            positive_magnitude = magnitude[:len(magnitude)//2]
+            
+            # Energy in different frequency bands
+            high_freq_energy = np.sum(positive_magnitude[positive_freqs > 8000])  # Very high frequencies
+            mid_high_energy = np.sum(positive_magnitude[(positive_freqs >= 4000) & (positive_freqs <= 8000)])
+            total_energy = np.sum(positive_magnitude)
+            
+            if total_energy == 0:
+                return "Closed Hi-Hats"  # Default fallback
+            
+            # Calculate energy decay (open hi-hats sustain longer)
+            early_samples = int(0.05 * sr)  # First 50ms
+            late_start = int(0.15 * sr)     # After 150ms
+            
+            decay_indicators = 0
+            
+            # Factor 1: Duration (open hi-hats typically longer)
+            if duration > 0.8:  # Longer than 800ms suggests open
+                decay_indicators += 1
+            elif duration < 0.3:  # Shorter than 300ms suggests closed
+                decay_indicators -= 1
+            
+            # Factor 2: High frequency content ratio
+            high_freq_ratio = high_freq_energy / total_energy
+            if high_freq_ratio > 0.3:  # Lots of high-freq content = closed (sharp)
+                decay_indicators -= 1
+            elif high_freq_ratio < 0.15:  # Less high-freq = open (more sustained/warm)
+                decay_indicators += 1
+            
+            # Factor 3: Energy decay analysis
+            if len(y) > late_start:
+                early_energy = np.mean(y[:early_samples]**2) if early_samples < len(y) else np.mean(y**2)
+                late_energy = np.mean(y[late_start:]**2)
+                
+                if late_energy > early_energy * 0.4:  # Sustained energy = open
+                    decay_indicators += 1
+                elif late_energy < early_energy * 0.1:  # Quick decay = closed
+                    decay_indicators -= 1
+            
+            # Factor 4: Spectral centroid (closed hi-hats tend to be brighter/higher)
+            if self.available_methods['librosa']:
+                try:
+                    import librosa
+                    spectral_centroid = np.mean(librosa.feature.spectral_centroid(y=y, sr=sr))
+                    if spectral_centroid > 10000:  # Very bright = closed
+                        decay_indicators -= 1
+                    elif spectral_centroid < 6000:  # Less bright = open
+                        decay_indicators += 1
+                except:
+                    pass
+            
+            # Decision: positive indicators = open, negative = closed
+            if decay_indicators > 0:
+                return "Open Hi-Hats"
+            else:
+                return "Closed Hi-Hats"  # Default to closed (more common)
+                
+        except Exception as e:
+            logger.warning(f"Hi-hat type classification failed: {e}")
+            return "Closed Hi-Hats"  # Safe default
 
     def _fallback_classification(self, y: np.ndarray, sr: int) -> str:
         """Fallback classification based on basic audio characteristics."""
@@ -1042,7 +1163,7 @@ class UniversalAudioAnalyzer:
         """Get information about the analysis system."""
         return {
             "cpu_type": self.config['cpu_type'],
-            "cpu_brand": self.cpu_detector.cpu_info.get('brand', 'Unknown'),
+            "cpu_brand": self._cached_cpu_brand,
             "available_methods": self.available_methods,
             "use_advanced_features": self.config['use_advanced_features'],
             "environment_vars": self.config['environment_vars']
