@@ -31,7 +31,7 @@ def apply_nord_theme(app):
         QWidget {{
             background-color: {NORD["nord0"]};
             color: {NORD["nord4"]};
-            font-family: 'Segoe UI', sans-serif;
+            font-family: 'Gmarket Sans', 'Segoe UI', sans-serif;
         }}
         
         QPushButton {{
@@ -40,6 +40,8 @@ def apply_nord_theme(app):
             border-radius: 4px;
             padding: 8px 16px;
             color: {NORD["nord6"]};
+            font-family: 'Gmarket Sans', 'Segoe UI', sans-serif;
+            font-weight: 500;
         }}
         
         QPushButton:hover {{
@@ -55,6 +57,7 @@ def apply_nord_theme(app):
             border: 1px solid {NORD["nord3"]};
             border-radius: 4px;
             padding: 4px;
+            font-family: 'Gmarket Sans', 'Segoe UI', sans-serif;
         }}
         
         QTreeWidget::item, QListWidget::item {{
@@ -73,6 +76,26 @@ def apply_nord_theme(app):
         
         QLabel {{
             color: {NORD["nord4"]};
+            font-family: 'Gmarket Sans', 'Segoe UI', sans-serif;
+        }}
+        
+        /* Header labels */
+        QLabel[class="header"] {{
+            font-weight: bold;
+            font-size: 14px;
+            color: {NORD["nord6"]};
+        }}
+        
+        /* Body text labels */
+        QLabel[class="body"] {{
+            font-weight: normal;
+            font-size: 10px;
+        }}
+        
+        /* Light text labels */
+        QLabel[class="light"] {{
+            font-weight: 300;
+            color: {NORD["nord3"]};
         }}
         
         QComboBox {{

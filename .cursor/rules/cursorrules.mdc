@@ -1,0 +1,31 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+1. **Code Generation Only**: Write Python code and perform static analysis. Do NOT run or execute the application unless explicitly asked for debugging purposes.
+
+2. **Use Latest APIs**: 
+   - Use current PyQt6 methods (avoid deprecated Qt5 syntax)
+   - Use qfluentwidgets components instead of standard PyQt6 widgets
+   - Check documentation for the latest stable versions before implementing
+
+3. **Code Review Checklist**: Before submitting code changes, verify:
+   - Syntax is correct
+   - Imports are present and correct
+   - Variable names are consistent
+   - Logic flow makes sense
+   - No obvious runtime errors
+
+4. **Ask Before Assuming**: If the user's request is unclear or could be interpreted multiple ways, ask specific clarifying questions like:
+   - "Do you want X or Y behavior?"
+   - "Should this apply to all cases or just specific ones?"
+   - "What should happen when [edge case] occurs?"
+
+5. **Debug Systematically**: When code doesn't work as expected:
+   - Read the full error message carefully
+   - Check the relevant documentation
+   - Examine the code structure and data flow
+   - Identify the specific line or component causing issues
+
+   - Avoid making random small changes hoping something works
